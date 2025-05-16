@@ -1,4 +1,6 @@
 import os
+import ssl
+from pytube import Playlist
 import re
 import json
 import requests
@@ -7,6 +9,18 @@ from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, No
 from youtube_transcript_api._errors import RequestBlocked
 import xml.etree.ElementTree as ET
 from xml.parsers.expat import ExpatError
+from pytube import Playlist
+
+
+# Workaround macOS SSL certificate verification issues
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    # Legacy Python that doesn't verify HTTPS certificates by default
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
+
 
 
 def create_http_client(cookie_file: str = "cookies.txt") -> requests.Session:
@@ -91,9 +105,9 @@ def format_output(transcript: list, video_id: str) -> dict:
     return {"raw_content": raw_content, "token_count": token_count, "url": url}
 
 
-def save_output(data: dict, video_id: str) -> None:
-    os.makedirs("output", exist_ok=True)
-    path = os.path.join("output", f"{video_id}.json")
+def save_output(data: dict, video_id: str, output_dir: str = "output") -> None:
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, f"{video_id}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print(f"Formatted transcript saved to {path}")
@@ -102,21 +116,51 @@ def save_output(data: dict, video_id: str) -> None:
 def main():
     print("YouTube Transcript Scraper — type 'exit' or 'quit' to stop")
     while True:
-        user_input = input("Enter YouTube video URL or ID (or 'exit' to quit): ").strip()
+        user_input = input("Enter YouTube video or playlist URL/ID (or 'exit' to quit): ").strip()
         if user_input.lower() in ("exit", "quit"):
             print("Goodbye!")
             break
+
+        # Playlist support
+        if "playlist" in user_input and "list=" in user_input:
+            m = re.search(r"list=([A-Za-z0-9_-]+)", user_input)
+            if not m:
+                print("Could not extract playlist ID.")
+                continue
+            playlist_id = m.group(1)
+            playlist_url = user_input.split("&si=")[0]
+            try:
+                pl = Playlist(playlist_url)
+            except Exception as e:
+                print(f"Error reading playlist: {e}")
+                continue
+            out_dir = os.path.join("output", playlist_id)
+            for video_url in pl.video_urls:
+                try:
+                    vid = get_video_id(video_url)
+                except ValueError as e:
+                    print(e)
+                    continue
+                transcript = fetch_transcript(vid)
+                if not transcript:
+                    print(f"No transcript for {vid}")
+                    continue
+                data = format_output(transcript, vid)
+                save_output(data, vid, out_dir)
+            continue
+
+        # Single video support
         try:
-            video_id = get_video_id(user_input)
+            vid = get_video_id(user_input)
         except ValueError as e:
             print(e)
             continue
-        transcript = fetch_transcript(video_id)
+        transcript = fetch_transcript(vid)
         if not transcript:
             print("No transcript to save.")
             continue
-        output_data = format_output(transcript, video_id)
-        save_output(output_data, video_id)
+        data = format_output(transcript, vid)
+        save_output(data, vid)
 
 if __name__ == "__main__":
     main()
