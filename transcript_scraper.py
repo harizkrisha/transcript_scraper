@@ -4,6 +4,9 @@ import json
 import requests
 from http.cookiejar import MozillaCookieJar
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from youtube_transcript_api._errors import RequestBlocked
+import xml.etree.ElementTree as ET
+from xml.parsers.expat import ExpatError
 
 
 def create_http_client(cookie_file: str = "cookies.txt") -> requests.Session:
@@ -11,32 +14,26 @@ def create_http_client(cookie_file: str = "cookies.txt") -> requests.Session:
     Create an HTTP client that routes through Tor and optionally loads browser cookies.
     """
     session = requests.Session()
-    # Route through Tor (SOCKS5) on localhost:9050
     session.proxies.update({
         "http":  "socks5h://127.0.0.1:9050",
         "https": "socks5h://127.0.0.1:9050",
     })
-    # Load cookies if available (Netscape format)
     if os.path.exists(cookie_file):
         jar = MozillaCookieJar(cookie_file)
         jar.load(ignore_discard=True, ignore_expires=True)
         session.cookies = jar
     return session
 
-# Initialize a shared HTTP client and transcript API instance
-http_client = create_http_client()
-ytt_api = YouTubeTranscriptApi(http_client=http_client)
+# Shared HTTP client and Transcript API
+ttp_session = create_http_client()
+ytt_api = YouTubeTranscriptApi(http_client=ttp_session)
 
 
 def get_video_id(url_or_id: str) -> str:
-    """
-    Extract the YouTube video ID from a URL or return it if already an ID.
-    Supports typical YouTube URL formats and short links.
-    """
     patterns = [
-        r"(?:v=)([0-9A-Za-z_-]{11})",  # standard URL
-        r"(?:be/)([0-9A-Za-z_-]{11})",  # short URL
-        r"^([0-9A-Za-z_-]{11})$"        # plain ID
+        r"(?:v=)([0-9A-Za-z_-]{11})",
+        r"(?:be/)([0-9A-Za-z_-]{11})",
+        r"^([0-9A-Za-z_-]{11})$"
     ]
     for pattern in patterns:
         match = re.search(pattern, url_or_id)
@@ -45,43 +42,56 @@ def get_video_id(url_or_id: str) -> str:
     raise ValueError(f"Could not extract a valid video ID from '{url_or_id}'")
 
 
-def fetch_transcript(video_id: str, language: str = "id") -> list:
-    """
-    Fetch the transcript for the given video ID in the specified language (default Indonesian).
-    Uses the shared HTTP client (Tor + cookies).
-    """
+def fetch_timed_text(video_id: str, language: str = "id") -> list:
+    url = f"http://video.google.com/timedtext?lang={language}&v={video_id}"
     try:
-        # ytt_api.fetch returns a FetchedTranscript object that's iterable
+        resp = ttp_session.get(url, timeout=10)
+        if not resp.ok or not resp.text.strip():
+            return []
+        root = ET.fromstring(resp.text)
+    except (requests.RequestException, ExpatError) as e:
+        print(f"Timed-text fetch failed: {e}")
+        return []
+    segments = []
+    for elem in root.findall('text'):
+        text = (elem.text or '').strip().replace("\n", " ")
+        start = float(elem.attrib.get('start', 0))
+        duration = float(elem.attrib.get('dur', 0))
+        segments.append({'text': text, 'start': start, 'duration': duration})
+    return segments
+
+
+def fetch_transcript(video_id: str, language: str = "id") -> list:
+    try:
         fetched = ytt_api.fetch(video_id, languages=[language])
-        # Convert to raw list of dicts if needed
         return fetched.to_raw_data()
     except TranscriptsDisabled:
         print(f"Transcripts are disabled for video {video_id}")
+        return []
     except NoTranscriptFound:
         print(f"No transcript found for video {video_id} in language '{language}'")
-    return []
+        return []
+    except RequestBlocked:
+        print(f"RequestBlocked: YouTube blocked requests for {video_id}. Retrying without proxy...")
+        ttp_session.proxies.clear()
+        try:
+            fetched = ytt_api.fetch(video_id, languages=[language])
+            return fetched.to_raw_data()
+        except Exception as e:
+            print(f"Retry without proxy failed: {e}")
+    except ExpatError:
+        print(f"XML parse error from API, falling back to raw timed-text...")
+    return fetch_timed_text(video_id, language)
 
 
 def format_output(transcript: list, video_id: str) -> dict:
-    """
-    Combine the transcript segments into a single raw_content string, estimate token count,
-    and set the video URL. Returns a dict with 'raw_content', 'token_count', and 'url'.
-    """
     raw_content = " ".join(segment['text'] for segment in transcript)
     token_count = len(raw_content) // 4
     url = f"https://www.youtube.com/watch?v={video_id}"
-
-    return {
-        "raw_content": raw_content,
-        "token_count": token_count,
-        "url": url
-    }
+    return {"raw_content": raw_content, "token_count": token_count, "url": url}
 
 
 def save_output(data: dict, video_id: str) -> None:
-    """
-    Save the formatted output dict to a JSON file under 'output/<video_id>.json'.
-    """
     os.makedirs("output", exist_ok=True)
     path = os.path.join("output", f"{video_id}.json")
     with open(path, "w", encoding="utf-8") as f:
@@ -90,21 +100,23 @@ def save_output(data: dict, video_id: str) -> None:
 
 
 def main():
-    user_input = input("Enter YouTube video URL or ID: ").strip()
-    try:
-        video_id = get_video_id(user_input)
-    except ValueError as e:
-        print(e)
-        return
-
-    transcript = fetch_transcript(video_id)
-    if not transcript:
-        print("No transcript to save.")
-        return
-
-    output_data = format_output(transcript, video_id)
-    save_output(output_data, video_id)
-
+    print("YouTube Transcript Scraper — type 'exit' or 'quit' to stop")
+    while True:
+        user_input = input("Enter YouTube video URL or ID (or 'exit' to quit): ").strip()
+        if user_input.lower() in ("exit", "quit"):
+            print("Goodbye!")
+            break
+        try:
+            video_id = get_video_id(user_input)
+        except ValueError as e:
+            print(e)
+            continue
+        transcript = fetch_transcript(video_id)
+        if not transcript:
+            print("No transcript to save.")
+            continue
+        output_data = format_output(transcript, video_id)
+        save_output(output_data, video_id)
 
 if __name__ == "__main__":
     main()
