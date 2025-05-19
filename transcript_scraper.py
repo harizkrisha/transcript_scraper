@@ -22,7 +22,7 @@ else:
     ssl._create_default_https_context = _create_unverified_https_context
 
 
-
+# this function creates an HTTP client that routes through Tor and optionally loads browser cookies
 def create_http_client(cookie_file: str = "cookies.txt") -> requests.Session:
     """
     Create an HTTP client that routes through Tor and optionally loads browser cookies.
@@ -42,7 +42,7 @@ def create_http_client(cookie_file: str = "cookies.txt") -> requests.Session:
 ttp_session = create_http_client()
 ytt_api = YouTubeTranscriptApi(http_client=ttp_session)
 
-
+# Function to extract video ID from URL or ID
 def get_video_id(url_or_id: str) -> str:
     patterns = [
         r"(?:v=)([0-9A-Za-z_-]{11})",
@@ -55,7 +55,7 @@ def get_video_id(url_or_id: str) -> str:
             return match.group(1)
     raise ValueError(f"Could not extract a valid video ID from '{url_or_id}'")
 
-
+# Function to fetch timed text from YouTube
 def fetch_timed_text(video_id: str, language: str = "id") -> list:
     url = f"http://video.google.com/timedtext?lang={language}&v={video_id}"
     try:
@@ -74,7 +74,7 @@ def fetch_timed_text(video_id: str, language: str = "id") -> list:
         segments.append({'text': text, 'start': start, 'duration': duration})
     return segments
 
-
+# Function to fetch transcript using YouTube Transcript API
 def fetch_transcript(video_id: str, language: str = "id") -> list:
     try:
         fetched = ytt_api.fetch(video_id, languages=[language])
@@ -83,28 +83,31 @@ def fetch_transcript(video_id: str, language: str = "id") -> list:
         print(f"Transcripts are disabled for video {video_id}")
         return []
     except NoTranscriptFound:
-        print(f"No transcript found for video {video_id} in language '{language}'")
+        print(f"No transcript found for video {video_id}")
         return []
     except RequestBlocked:
-        print(f"RequestBlocked: YouTube blocked requests for {video_id}. Retrying without proxy...")
+        print(f"RequestBlocked for {video_id}, retrying without proxy…")
         ttp_session.proxies.clear()
         try:
             fetched = ytt_api.fetch(video_id, languages=[language])
             return fetched.to_raw_data()
         except Exception as e:
-            print(f"Retry without proxy failed: {e}")
-    except ExpatError:
-        print(f"XML parse error from API, falling back to raw timed-text...")
+            print(f"Retry failed: {e}")
+    # Catch both ExpatError and ElementTree.ParseError
+    except (ExpatError, ET.ParseError) as e:
+        print(f"XML parse error ({type(e).__name__}), falling back to timed-text…")
+
+    # Fallback to raw timed-text endpoint
     return fetch_timed_text(video_id, language)
 
-
+# Function to format the output
 def format_output(transcript: list, video_id: str) -> dict:
     raw_content = " ".join(segment['text'] for segment in transcript)
     token_count = len(raw_content) // 4
     url = f"https://www.youtube.com/watch?v={video_id}"
     return {"raw_content": raw_content, "token_count": token_count, "url": url}
 
-
+# Function to save the output to a JSON
 def save_output(data: dict, video_id: str, output_dir: str = "output") -> None:
     os.makedirs(output_dir, exist_ok=True)
     path = os.path.join(output_dir, f"{video_id}.json")
