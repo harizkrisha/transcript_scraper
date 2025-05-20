@@ -98,7 +98,6 @@ This opens a web UI at `http://localhost:8501` by default.
 1. Switch **Mode → Dashboard** in the sidebar.
 2. **Project‑level stats**: shows total JSON files, sum of token counts, and total bytes per project.
 3. **Subproject‑level stats**: similar breakdown per subproject.
-4. **Generate tokens.csv**: click **Run Token Estimator** to create `output/<project>/<subproject>/tokens/tokens.csv`, listing each JSON’s token count plus a TOTAL row.
 
 ---
 
