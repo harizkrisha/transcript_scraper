@@ -1,0 +1,10 @@
+streamlit
+pysocks
+requests
+pytube
+youtube-transcript-api
+beautifulsoup4
+warcio
+langdetect
+tqdm
+PyMuPDF

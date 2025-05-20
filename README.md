@@ -1,113 +1,123 @@
-# YouTube Transcript Scraper
+# YouTube Transcript Manager & Dashboard
 
-This Python script fetches and saves transcripts for YouTube videos or entire playlists (Indonesian by default), with built‑in support for Tor proxy routing, optional cookie authentication, and intelligent fallbacks.
+An end‑to‑end Python application that:
 
----
-
-## Features
-
-* **Interactive CLI**: Continuously prompts until you type `exit` or `quit`.
-* **Single Video**: Fetches transcripts from one video URL/ID using `youtube-transcript-api`.
-* **Playlist Mode**: Given a playlist URL/ID, iterates through every video and saves each transcript separately.
-* **Anonymized Requests**: Routes through Tor (`socks5h://127.0.0.1:9050`) to avoid IP bans.
-* **Cookie Authentication**: Detects a `cookies.txt` (Netscape format) for age‑restricted or region‑locked content.
-* **Robust Fallbacks**:
-
-  * Retries without Tor if blocked.
-  * Falls back to raw timed‑text XML parsing on error.
-* **JSON Output**: Saves each transcript in `output/` (or `output/<playlist_id>/`) with:
-
-  ```json
-  {
-    "raw_content": "…",
-    "token_count": 123,
-    "url": "https://www.youtube.com/watch?v=…"
-  }
-  ```
+* **Scrapes:** Fetches Indonesian (or other) transcripts from YouTube videos or playlists via Tor proxy and optional cookie authentication.
+* **Organizes:** Saves each transcript into a hierarchical `output/<project>/<subproject>/` folder structure.
+* **Dashboards:** Displays project‑ and subproject‑level statistics (file counts, token totals, byte sizes).
+* **Token Estimation:** Generates `tokens.csv` summarizing token counts per transcript JSON.
 
 ---
 
-## Prerequisites
+## 📦 Installation
 
-* **Python** 3.7+
-* **pip** for installing Python packages
-* **Tor** service (for SOCKS5 proxy)
-* *(Optional)* Browser cookies in `cookies.txt` (export via a plugin like "Export Cookies" in Netscape format)
-
----
-
-## Installation
-
-1. **Clone the repo**
+1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/youtube_scraper.git
-   cd youtube_scraper
+   git clone https://github.com/harizkrisha/transcript_scraper.git
+   cd transcript_scraper
    ```
 
-2. **Install Python dependencies**
+2. **Install system prerequisites:**
+
+   * **Python 3.7+** and **pip**
+   * **Tor** (for SOCKS5 proxy):
+
+     * macOS (Homebrew):
+
+       ```bash
+       brew install tor
+       brew services start tor
+       ```
+     * Ubuntu/Debian:
+
+       ```bash
+       sudo apt update && sudo apt install tor
+       sudo systemctl enable --now tor
+       ```
+     * Windows:
+
+       1. Download the Tor Expert Bundle from [https://www.torproject.org/download/](https://www.torproject.org/download/)
+       2. Run `tor.exe` in a terminal.
+
+3. **Export YouTube cookies (optional):**
+
+   * Use a browser extension (e.g. **EditThisCookie**, **Cookie-Editor**) to export your YouTube session cookies in **Netscape** format as `cookies.txt` in the project root.
+
+4. **Install Python dependencies:**
 
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Install Tor**
+   The `requirements.txt` includes:
 
-   * **macOS (Homebrew)**:
-
-     ```bash
-     brew install tor
-     brew services start tor
-     ```
-   * **Ubuntu/Debian**:
-
-     ```bash
-     sudo apt update
-     sudo apt install tor
-     sudo systemctl enable --now tor
-     ```
-   * **Windows**:
-
-     1. Download and install the [Tor Expert Bundle](https://www.torproject.org/download/).
-     2. Start `tor.exe` in a terminal.
-
-4. **(Optional) Export Cookies**
-
-   * Use a browser extension (e.g., "EditThisCookie" or "Cookie-Editor") to export your YouTube cookies in **Netscape** format to a file named `cookies.txt` in the script directory.
+   ```text
+   streamlit
+   pysocks
+   requests
+   pytube
+   youtube-transcript-api
+   beautifulsoup4
+   warcio
+   langdetect
+   tqdm
+   PyMuPDF
+   ```
 
 ---
 
-## Usage
+## ⚙️ Usage
 
-Run the scraper:
+### 1. Launch the Streamlit App
 
 ```bash
-python transcript_scraper.py
+streamlit run app.py
 ```
 
-* **Single video**: Paste a YouTube URL or ID at the prompt.
-* **Playlist**: Paste a playlist link (`https://youtube.com/playlist?list=…`) and the script will batch‑process every video.
-* **Exit**: Type `exit` or `quit` when you’re done.
+This opens a web UI at `http://localhost:8501` by default.
 
-Transcripts appear in the `output/` folder (or `output/<playlist_id>/`).
+### 2. Project & Subproject Management (Sidebar)
+
+1. **Select** an existing project or click **Add New Project** and enter a name.
+2. Once a project is selected, **Select Subproject** or click **Add New Subproject**.
+3. Your **Current Selection** drives where transcripts and reports are saved.
+
+### 3. Scraper Mode (Default)
+
+1. In **Mode → Scraper**, enter a **YouTube video** URL/ID or **playlist** URL/ID.
+2. Click **Fetch Transcript**.
+3. Transcript JSONs are saved under:
+
+   ```text
+   output/<project>/<subproject>/[<playlist_id>/]<video_id>.json
+   ```
+
+### 4. Dashboard Mode
+
+1. Switch **Mode → Dashboard** in the sidebar.
+2. **Project‑level stats**: shows total JSON files, sum of token counts, and total bytes per project.
+3. **Subproject‑level stats**: similar breakdown per subproject.
+4. **Generate tokens.csv**: click **Run Token Estimator** to create `output/<project>/<subproject>/tokens/tokens.csv`, listing each JSON’s token count plus a TOTAL row.
 
 ---
 
-## Troubleshooting
+## 🔧 Example Workflow
 
-* **Tor not listening on 127.0.0.1:9050?**
-  Ensure the Tor daemon is running:  `tor` or `brew services start tor` (macOS) or `systemctl start tor` (Linux).
+1. **Create** a project `MyYTTranscripts` and subproject `Tutorials`.
+2. **Fetch** a single video:
 
-* **SSL issues on macOS?**
-  Run the bundled `Install Certificates.command` found in your Python installation directory (e.g., `/Applications/Python 3.x/`).
+   * Input `https://www.youtube.com/watch?v=ABC123XYZ` → saved as
+     `output/MyYTTranscripts/Tutorials/ABC123XYZ.json`.
+3. **Fetch** a playlist:
 
-* **No transcript found?**
-
-  * Video may not have captions in Indonesian.
-  * Remove `languages=["id"]` or adjust the language code in the script.
+   * Input `https://youtube.com/playlist?list=PL12345` → folder
+     `output/MyYTTranscripts/Tutorials/PL12345/…` with each video’s JSON.
+4. **View stats** in **Dashboard**: see counts of files, tokens, and disk usage.
+5. **Generate** `tokens.csv`: download a CSV of token counts for each JSON.
 
 ---
 
-## License
+## 📜 License
 
-MIT © Your Name
+MIT © Hariz Krisha Muhammad
