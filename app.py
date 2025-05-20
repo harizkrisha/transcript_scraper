@@ -30,39 +30,52 @@ else:
 # ─── Initialize HTTP client (via transcript_scraper) ───────────────────────
 ttp_session = create_http_client()
 
-# ─── Sidebar: Project Management ─────────────────────────────────────────
+# ─── Sidebar: Project & Subproject Management ────────────────────────────
 OUTPUT_ROOT = "output"
 st.sidebar.header("Project Management")
 
+# Initialize ProjectManager
 pm = ProjectManager(OUTPUT_ROOT)
-os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
-# Show existing projects
-st.sidebar.subheader("Existing Projects")
-for proj in pm.get_projects():
-    st.sidebar.write(f"• {proj}")
-
-# Select a project
-project = st.sidebar.selectbox(
-    "Select Project",
-    ["-- none --"] + pm.get_projects(),
-    key="project_select"
-)
-if project != "-- none --":
-    st.session_state.current_project = project
-    st.sidebar.success(f"Selected: {project}")
-else:
+# Session state defaults
+if "current_project" not in st.session_state:
     st.session_state.current_project = None
+if "current_subproject" not in st.session_state:
+    st.session_state.current_subproject = None
+if "adding_project" not in st.session_state:
+    st.session_state.adding_project = False
+if "adding_subproject" not in st.session_state:
+    st.session_state.adding_subproject = False
 
-# Add new project
+# -- Display existing structure --
+st.sidebar.subheader("Existing Projects")
+projects = pm.get_projects()
+for proj in projects:
+    st.sidebar.write(f"• {proj}")
+    for sub in pm.get_subprojects(proj):
+        st.sidebar.write(f"    – {sub}")
+
+st.sidebar.markdown("---")
+
+# -- Project Selection --
+proj_choice = st.sidebar.selectbox(
+    "Select Project",
+    ["-- none --"] + projects,
+    key="proj_select"
+)
+if proj_choice != "-- none --":
+    st.session_state.current_project = proj_choice
+    st.session_state.current_subproject = None
+
+# -- Add New Project --
 if st.sidebar.button("Add New Project"):
     st.session_state.adding_project = True
 
-if st.session_state.get("adding_project", False):
-    new_proj = st.sidebar.text_input("New Project Name", key="new_proj_input")
+if st.session_state.adding_project:
+    new_proj = st.sidebar.text_input("Project Name", key="new_proj_input")
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        if st.button("Save Project", key="save_proj"):
+        if st.button("Save Project"):
             success, msg = pm.create_project(new_proj)
             if success:
                 st.success(msg)
@@ -70,59 +83,89 @@ if st.session_state.get("adding_project", False):
             else:
                 st.error(msg)
     with col2:
-        if st.button("Cancel", key="cancel_proj"):
+        if st.button("Cancel"):
             st.session_state.adding_project = False
 
+# -- Subproject Selection --
+if st.session_state.current_project:
+    subprojects = pm.get_subprojects(st.session_state.current_project)
+    sub_choice = st.sidebar.selectbox(
+        "Select Subproject",
+        ["-- none --"] + subprojects,
+        key="sub_select"
+    )
+    if sub_choice != "-- none --":
+        st.session_state.current_subproject = sub_choice
+
+    # Add New Subproject
+    if st.sidebar.button("Add New Subproject"):
+        st.session_state.adding_subproject = True
+
+    if st.session_state.adding_subproject:
+        new_sub = st.sidebar.text_input("Subproject Name", key="new_sub_input")
+        c1, c2 = st.sidebar.columns(2)
+        with c1:
+            if st.button("Save Subproject"):
+                success, msg = pm.create_subproject(
+                    st.session_state.current_project, new_sub
+                )
+                if success:
+                    st.success(msg)
+                    st.session_state.adding_subproject = False
+                else:
+                    st.error(msg)
+        with c2:
+            if st.button("Cancel Subproject"):
+                st.session_state.adding_subproject = False
+
 st.sidebar.markdown("---")
-st.sidebar.write("Current Project:")
-st.sidebar.write(st.session_state.get("current_project") or "None")
+st.sidebar.write("Current Selection:")
+st.sidebar.write(f"Project: {st.session_state.current_project or 'None'}")
+st.sidebar.write(f"Subproject: {st.session_state.current_subproject or 'None'}")
 
-# ─── Determine base directory ─────────────────────────────────────────────
-if st.session_state.get("current_project"):
-    base_dir = os.path.join(OUTPUT_ROOT, st.session_state.current_project)
-    os.makedirs(base_dir, exist_ok=True)
-else:
-    base_dir = None
+# Determine base output directory
+base_dir = OUTPUT_ROOT
+if st.session_state.current_project:
+    base_dir = os.path.join(base_dir, st.session_state.current_project)
+    if st.session_state.current_subproject:
+        base_dir = os.path.join(base_dir, st.session_state.current_subproject)
+os.makedirs(base_dir, exist_ok=True)
 
-# ─── Main UI ──────────────────────────────────────────────────────────────
+# ─── STREAMLIT MAIN UI ────────────────────────────────────────────────────
 st.title("YouTube Transcript Scraper")
 
 input_url = st.text_input("Enter YouTube video or playlist URL/ID:")
 
 if st.button("Fetch Transcript"):
-    if not base_dir:
-        st.error("Please select or create a project first.")
-    else:
-        try:
-            # Playlist mode
-            if "playlist" in input_url and "list=" in input_url:
-                pid = re.search(r"list=([A-Za-z0-9_-]+)", input_url).group(1)
-                st.write(f"🔗 Playlist detected: {pid}")
-                pl = Playlist(input_url)
+    try:
+        # Playlist mode
+        if "playlist" in input_url and "list=" in input_url:
+            pid = re.search(r"list=([A-Za-z0-9_-]+)", input_url).group(1)
+            st.write(f"🔗 Playlist detected: {pid}")
+            pl = Playlist(input_url)
+            playlist_dir = os.path.join(base_dir, pid)
+            os.makedirs(playlist_dir, exist_ok=True)
 
-                playlist_dir = os.path.join(base_dir, pid)
-                os.makedirs(playlist_dir, exist_ok=True)
-
-                for url in pl.video_urls:
-                    vid = get_video_id(url)
-                    segs = fetch_transcript(vid)
-                    if not segs:
-                        st.warning(f"No transcript for {vid}")
-                        continue
-                    data = format_output(segs, vid)
-                    save_output(data, vid, playlist_dir)
-                    st.success(f"Saved {vid}.json → {playlist_dir}")
-
-            # Single-video mode
-            else:
-                vid = get_video_id(input_url)
+            for url in pl.video_urls:
+                vid = get_video_id(url)
                 segs = fetch_transcript(vid)
                 if not segs:
-                    st.warning("No transcript found.")
-                else:
-                    data = format_output(segs, vid)
-                    save_output(data, vid, base_dir)
-                    st.success(f"Saved {vid}.json → {base_dir}")
+                    st.warning(f"No transcript for {vid}")
+                    continue
+                data = format_output(segs, vid)
+                save_output(data, vid, playlist_dir)
+                st.success(f"Saved {vid}.json → {playlist_dir}")
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+        # Single-video mode
+        else:
+            vid = get_video_id(input_url)
+            segs = fetch_transcript(vid)
+            if not segs:
+                st.warning("No transcript found.")
+            else:
+                data = format_output(segs, vid)
+                save_output(data, vid, base_dir)
+                st.success(f"Saved {vid}.json → {base_dir}")
+
+    except Exception as e:
+        st.error(f"Error: {e}")
