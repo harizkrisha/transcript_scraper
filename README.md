@@ -118,6 +118,15 @@ This opens a web UI at `http://localhost:8501` by default.
 
 ---
 
-## 📜 License
+## 📜 Credits
 
-MIT © Hariz Krisha Muhammad
+This project was developed by:
+- Hariz Krisha Muhammad
+   - email: harizkrisha@gmail.com
+   - github: harizkrisha
+
+Additionally, this project was heavily inspired by the works of:
+- NailFaaz
+   - Email: nailfaaz2004@gmail.com
+   - GitHub: Nailfaaz
+
