@@ -134,11 +134,6 @@ Connection Method:
 - “Use Tor (Privacy Enhanced)”
 - “Direct Connection (Faster)”
 - Refresh Connection: Re-test your selected method.
-
-Status:
-✅ Connected via Tor
-❌ Tor requested but unavailable
-ℹ️ Using direct connection
 ---
 
 ## 🔧 Example Workflow
