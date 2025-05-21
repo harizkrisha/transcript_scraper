@@ -1,11 +1,35 @@
 # YouTube Transcript Manager & Dashboard
 
-An end‑to‑end Python application that:
+## Features
 
-* **Scrapes:** Fetches Indonesian (or other) transcripts from YouTube videos or playlists via Tor proxy and optional cookie authentication.
-* **Organizes:** Saves each transcript into a hierarchical `output/<project>/<subproject>/` folder structure.
-* **Dashboards:** Displays project‑ and subproject‑level statistics (file counts, token totals, byte sizes).
-* **Token Estimation:** Generates `tokens.csv` summarizing token counts per transcript JSON.
+- **Connection Settings**  
+  - Choose between **Tor** (privacy-enhanced) or **direct** (faster) HTTP.  
+  - Sidebar shows real-time connection status & any error details.  
+  - Optional browser cookies support for age-/region-restricted videos.  
+
+- **Project & Subproject Management**  
+  - Create or select **projects** and **subprojects** in `output/`.  
+  - All transcripts saved under `output/<project>/<subproject>/…`.  
+
+- **Transcript Scraper**  
+  - Single-video or YouTube playlist mode.  
+  - Automatic fallback from official API → raw timed-text XML if needed.  
+  - Outputs JSON files:  
+    ```json
+    {
+      "raw_content": "...",
+      "token_count": 1234,
+      "url": "https://www.youtube.com/watch?v=VIDEOID"
+    }
+    ```
+
+- **Dashboard & Token Estimator**  
+  - Overview tables for project- and subproject-level stats:  
+    - Number of JSON files  
+    - Sum of tokens  
+    - Total bytes on disk  
+  - Generate a `tokens.csv` with per-file token counts and a `TOTAL` row.
+
 
 ---
 
@@ -47,7 +71,13 @@ An end‑to‑end Python application that:
 4. **Install Python dependencies:**
 
    ```bash
-   pip install -r requirements.txt
+   python3 -m venv .venv
+  source .venv/bin/activate   # Linux/macOS
+  .\.venv\Scripts\activate    # Windows PowerShell
+
+  pip install --upgrade pip
+  pip install -r requirements.txt
+
    ```
 
    The `requirements.txt` includes:
@@ -99,6 +129,16 @@ This opens a web UI at `http://localhost:8501` by default.
 2. **Project‑level stats**: shows total JSON files, sum of token counts, and total bytes per project.
 3. **Subproject‑level stats**: similar breakdown per subproject.
 
+### 5. Connection Settings (Sidebar)
+Connection Method:
+- “Use Tor (Privacy Enhanced)”
+- “Direct Connection (Faster)”
+- Refresh Connection: Re-test your selected method.
+
+Status:
+✅ Connected via Tor
+❌ Tor requested but unavailable
+ℹ️ Using direct connection
 ---
 
 ## 🔧 Example Workflow
