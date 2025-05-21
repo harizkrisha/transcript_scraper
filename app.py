@@ -32,8 +32,44 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
+# Initialize session state for connection preference
+if "use_tor" not in st.session_state:
+    st.session_state.use_tor = True
+
+# ─── Connection Settings in Sidebar ────────────────────────────────────────
+st.sidebar.subheader("Connection Settings")
+connection_option = st.sidebar.radio(
+    "Connection Method:",
+    ["Use Tor (Privacy Enhanced)", "Direct Connection (Faster)"],
+    index=0 if st.session_state.use_tor else 1
+)
+st.session_state.use_tor = connection_option == "Use Tor (Privacy Enhanced)"
+
+if st.sidebar.button("Refresh Connection"):
+    st.rerun()
+
 # ─── Initialize HTTP client ────────────────────────────────────────────────
-ttp_session = create_http_client()
+ttp_session, connection_status = create_http_client(use_tor=st.session_state.use_tor)
+
+# ─── Add Connection Status Indicator to Sidebar ────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.subheader("Connection Status")
+
+if connection_status["using_tor"]:
+    st.sidebar.success("✅ Connected via Tor")
+else:
+    if st.session_state.use_tor:
+        st.sidebar.error("❌ Tor requested but unavailable")
+    else:
+        st.sidebar.info("ℹ️ Using direct connection (by choice)")
+    
+    if connection_status["error"]:
+        st.sidebar.info(f"Details: {connection_status['error']}")
+
+if connection_status["cookies_loaded"]:
+    st.sidebar.info("🍪 Browser cookies loaded")
+
+st.sidebar.markdown("---")
 
 # ─── Application Mode ─────────────────────────────────────────────────────
 mode = st.sidebar.radio("Mode", ["Scraper", "Dashboard"])

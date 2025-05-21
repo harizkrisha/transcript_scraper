@@ -22,24 +22,64 @@ else:
     ssl._create_default_https_context = _create_unverified_https_context
 
 
-# this function creates an HTTP client that routes through Tor and optionally loads browser cookies
-def create_http_client(cookie_file: str = "cookies.txt") -> requests.Session:
+# this function creates an HTTP client that attempts to route through Tor and optionally loads browser cookies
+def create_http_client(cookie_file: str = "cookies.txt", use_tor: bool = True) -> tuple[requests.Session, dict]:
     """
-    Create an HTTP client that routes through Tor and optionally loads browser cookies.
+    Create an HTTP client that attempts to route through Tor and optionally loads browser cookies.
+    
+    Args:
+        cookie_file: Path to Netscape-format cookies.txt file
+        use_tor: Whether to attempt connecting through Tor
+        
+    Returns:
+        tuple: (session, status) where status contains connection information
     """
     session = requests.Session()
-    session.proxies.update({
-        "http":  "socks5h://127.0.0.1:9050",
-        "https": "socks5h://127.0.0.1:9050",
-    })
+    status = {
+        "using_tor": False,
+        "connection_type": "direct",
+        "cookies_loaded": False,
+        "error": None
+    }
+    
+    # Try to use Tor if requested
+    if use_tor:
+        tor_proxies = {
+            "http":  "socks5h://127.0.0.1:9050",
+            "https": "socks5h://127.0.0.1:9050",
+        }
+        
+        # Test if Tor is available
+        try:
+            test_session = requests.Session()
+            test_session.proxies.update(tor_proxies)
+            response = test_session.get("https://check.torproject.org", timeout=5)
+            
+            if "Congratulations" in response.text:
+                session.proxies.update(tor_proxies)
+                status["using_tor"] = True
+                status["connection_type"] = "Tor"
+            else:
+                status["error"] = "Tor is running but connection check failed"
+        except Exception as e:
+            status["error"] = f"Tor not available: {str(e)}"
+    else:
+        status["error"] = "Direct connection selected by user"
+    
+    # Load cookies if available
     if os.path.exists(cookie_file):
-        jar = MozillaCookieJar(cookie_file)
-        jar.load(ignore_discard=True, ignore_expires=True)
-        session.cookies = jar
-    return session
+        try:
+            jar = MozillaCookieJar(cookie_file)
+            jar.load(ignore_discard=True, ignore_expires=True)
+            session.cookies = jar
+            status["cookies_loaded"] = True
+        except Exception as e:
+            status["error"] = f"Failed to load cookies: {str(e)}"
+    
+    return session, status
 
 # Shared HTTP client and Transcript API
-ttp_session = create_http_client()
+ttp_session, connection_status = create_http_client()
 ytt_api = YouTubeTranscriptApi(http_client=ttp_session)
 
 # Function to extract video ID from URL or ID
