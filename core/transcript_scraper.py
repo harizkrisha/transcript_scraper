@@ -79,8 +79,8 @@ def create_http_client(cookie_file: str = "cookies.txt", use_tor: bool = True) -
     return session, status
 
 # Shared HTTP client and Transcript API
-ttp_session, connection_status = create_http_client()
-ytt_api = YouTubeTranscriptApi(http_client=ttp_session)
+http_session, connection_status = create_http_client()
+ytt_api = YouTubeTranscriptApi(http_client=http_session)
 
 # Function to extract video ID from URL or ID
 def get_video_id(url_or_id: str) -> str:
@@ -99,7 +99,7 @@ def get_video_id(url_or_id: str) -> str:
 def fetch_timed_text(video_id: str, language: str = "id") -> list:
     url = f"http://video.google.com/timedtext?lang={language}&v={video_id}"
     try:
-        resp = ttp_session.get(url, timeout=10)
+        resp = http_session.get(url, timeout=10)
         if not resp.ok or not resp.text.strip():
             return []
         root = ET.fromstring(resp.text)
@@ -127,7 +127,7 @@ def fetch_transcript(video_id: str, language: str = "id") -> list:
         return []
     except RequestBlocked:
         print(f"RequestBlocked for {video_id}, retrying without proxy…")
-        ttp_session.proxies.clear()
+        http_session.proxies.clear()
         try:
             fetched = ytt_api.fetch(video_id, languages=[language])
             return fetched.to_raw_data()
