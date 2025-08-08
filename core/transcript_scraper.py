@@ -11,6 +11,10 @@ import xml.etree.ElementTree as ET
 from xml.parsers.expat import ExpatError
 from pytube import Playlist
 
+# Shared client and API instances (updated by create_http_client)
+ttp_session: requests.Session | None = None
+ytt_api: YouTubeTranscriptApi | None = None
+
 
 # Workaround macOS SSL certificate verification issues
 try:
@@ -34,6 +38,8 @@ def create_http_client(cookie_file: str = "cookies.txt", use_tor: bool = True) -
     Returns:
         tuple: (session, status) where status contains connection information
     """
+    global ttp_session, ytt_api
+
     session = requests.Session()
     status = {
         "using_tor": False,
@@ -64,7 +70,8 @@ def create_http_client(cookie_file: str = "cookies.txt", use_tor: bool = True) -
         except Exception as e:
             status["error"] = f"Tor not available: {str(e)}"
     else:
-        status["error"] = "Direct connection selected by user"
+        # Direct connection was chosen explicitly; this is not an error
+        status["error"] = None
     
     # Load cookies if available
     if os.path.exists(cookie_file):
@@ -75,12 +82,15 @@ def create_http_client(cookie_file: str = "cookies.txt", use_tor: bool = True) -
             status["cookies_loaded"] = True
         except Exception as e:
             status["error"] = f"Failed to load cookies: {str(e)}"
-    
+
+    # Update the shared session and YouTubeTranscriptApi instance
+    ttp_session = session
+    ytt_api = YouTubeTranscriptApi(http_client=session)
+
     return session, status
 
 # Shared HTTP client and Transcript API
 ttp_session, connection_status = create_http_client()
-ytt_api = YouTubeTranscriptApi(http_client=ttp_session)
 
 # Function to extract video ID from URL or ID
 def get_video_id(url_or_id: str) -> str:
