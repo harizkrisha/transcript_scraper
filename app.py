@@ -49,7 +49,7 @@ if st.sidebar.button("Refresh Connection"):
     st.rerun()
 
 # ─── Initialize HTTP client ────────────────────────────────────────────────
-ttp_session, connection_status = create_http_client(use_tor=st.session_state.use_tor)
+http_session, connection_status = create_http_client(use_tor=st.session_state.use_tor)
 
 # ─── Add Connection Status Indicator to Sidebar ────────────────────────────
 st.sidebar.markdown("---")
